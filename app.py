@@ -1,63 +1,44 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-from pmdarima import auto_arima
-from statsmodels.tsa.statespace.sarimax import SARIMAX
-import warnings
+from statsmodels.tsa.arima.model import ARIMA
+import numpy as np
 
-warnings.filterwarnings("ignore")
+st.set_page_config(page_title="Electricity Forecast App", layout="wide")
+st.title("🔌 Electricity Consumption Forecasting")
 
-# Title
-st.title("Electricity Consumption Forecasting App")
-
-# Load the dataset
-df = pd.read_csv("data.csv")
-
-# Convert date to datetime
-df['date'] = pd.to_datetime(df['date'])
-
-# Sort by date
-df = df.sort_values('date')
-
-# Set index
+# Load data
+df = pd.read_csv("data.csv", parse_dates=['date'])
 df.set_index('date', inplace=True)
 
-# Show raw data
-st.subheader("Raw Data")
-st.write(df.head())
+st.subheader("📊 Raw Data")
+st.dataframe(df)
 
-# Optional: Line chart of consumption
-st.subheader("Electricity Consumption Over Time")
+# Plot original consumption
+st.subheader("📈 Electricity Consumption Over Time")
 st.line_chart(df['consumption'])
 
-# Optional: Show temperature trend
-if 'temperature' in df.columns:
-    st.subheader("Temperature Over Time")
-    st.line_chart(df['temperature'])
+# ARIMA Forecasting
+st.subheader("🔮 Forecasted Consumption")
 
-# Train-test split
-train = df['consumption'][:-14]
-test = df['consumption'][-14:]
+# Fit ARIMA model
+model = ARIMA(df['consumption'], order=(1, 1, 1))
+model_fit = model.fit()
 
-# Fit SARIMA model
-model = SARIMAX(train, order=(1, 1, 1), seasonal_order=(1, 1, 1, 7))
-results = model.fit()
+# Forecast next 7 days
+forecast_steps = 7
+forecast = model_fit.forecast(steps=forecast_steps)
 
-# Forecast next 14 days
-forecast = results.predict(start=len(train), end=len(train) + len(test) - 1, dynamic=False)
+# Create future date index
+last_date = df.index[-1]
+future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=forecast_steps)
 
-# Plot forecast vs actual
-st.subheader("Forecast vs Actual")
-fig, ax = plt.subplots()
-test.plot(ax=ax, label='Actual')
-forecast.plot(ax=ax, label='Forecast')
-plt.legend()
-st.pyplot(fig)
+# Combine into forecast DataFrame
+forecast_df = pd.DataFrame({'Forecast': forecast}, index=future_dates)
 
-# Optional: Forecast future (next 14 days beyond last date)
-st.subheader("Forecast for Next 14 Days")
-future_model = SARIMAX(df['consumption'], order=(1, 1, 1), seasonal_order=(1, 1, 1, 7))
-future_results = future_model.fit()
-future_forecast = future_results.predict(start=len(df), end=len(df) + 13, dynamic=False)
+# Plot forecast
+st.line_chart(forecast_df)
 
-st.line_chart(future_forecast)
+# Show forecast table
+st.write("### Forecasted Values")
+st.dataframe(forecast_df)
